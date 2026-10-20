@@ -1,0 +1,633 @@
+<title>Rius d'Europa</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Spectral:ital,wght@1,500&display=swap">
+<style>
+/* Layout: one-screen app — atlas map fills the stage, a study panel docks right (stacks below on phones). Colors of each sea match the highlighters of the study sheet. */
+:root{
+  --bg:#e8eeed; --panel:#fbfcfa; --ink:#1b2a2e; --muted:#5a6a6e; --line:#d0dad9;
+  --sea:#bcd8e2; --grat:#a7c9d6; --land:#e4e2c6; --coast:#8f9c79; --border:#cfc8a8; --halo:#f8f9f3;
+  --river:#2f6fb4; --river-case:#f8f9f3;
+  --accent:#0c6a88; --accent-ink:#ffffff; --ok:#2c8a4b; --bad:#c23e2b;
+  --c-med:#d02f6a; --c-caspi:#2f8a3e; --c-negre:#0f86a8; --c-atl:#d9620c; --c-artic:#a78300;
+  --f-display:"Bricolage Grotesque",system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-sea:"Spectral",Georgia,"Times New Roman",serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f171a; --panel:#152024; --ink:#e4eded; --muted:#9bb0b3; --line:#29393e;
+  --sea:#14313d; --grat:#1c4150; --land:#2b3326; --coast:#5f6f52; --border:#454a39; --halo:#0e1619;
+  --river:#6fb7f2; --river-case:#0e1619;
+  --accent:#5fc3e3; --accent-ink:#06222c; --ok:#5ccf85; --bad:#ff7d68;
+  --c-med:#f472a4; --c-caspi:#6fd17e; --c-negre:#4fd0f0; --c-atl:#ffa057; --c-artic:#f0d04a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f171a; --panel:#152024; --ink:#e4eded; --muted:#9bb0b3; --line:#29393e;
+  --sea:#14313d; --grat:#1c4150; --land:#2b3326; --coast:#5f6f52; --border:#454a39; --halo:#0e1619;
+  --river:#6fb7f2; --river-case:#0e1619;
+  --accent:#5fc3e3; --accent-ink:#06222c; --ok:#5ccf85; --bad:#ff7d68;
+  --c-med:#f472a4; --c-caspi:#6fd17e; --c-negre:#4fd0f0; --c-atl:#ffa057; --c-artic:#f0d04a; color-scheme:dark}
+
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45}
+*{box-sizing:border-box}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+
+.app{height:100%;display:grid;grid-template-rows:auto 1fr;gap:12px;padding-block:12px 16px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.top{display:flex;align-items:center;gap:12px 24px;flex-wrap:wrap}
+.brand{display:flex;flex-direction:column;min-width:0}
+.eyebrow{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700}
+h1{margin:0;font-family:var(--f-display);font-weight:800;font-size:clamp(22px,3vw,30px);line-height:1;letter-spacing:-.01em}
+h1 small{font-weight:600;font-size:.5em;color:var(--muted);letter-spacing:0;margin-left:6px}
+.modes{display:flex;gap:4px;padding:4px;background:var(--panel);border:1px solid var(--line);border-radius:12px;flex-wrap:wrap}
+.modes button{border:0;background:none;padding:8px 12px;border-radius:9px;font-weight:700;color:var(--muted)}
+.modes button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink)}
+.modes button:hover:not([aria-selected="true"]){color:var(--ink);background:var(--bg)}
+.score{margin-left:auto;font-variant-numeric:tabular-nums;font-weight:700;display:flex;gap:14px}
+.score .ok{color:var(--ok)} .score .bad{color:var(--bad)}
+
+.stage{display:grid;grid-template-columns:minmax(0,1fr) 350px;gap:12px;min-height:0}
+.mapwrap{position:relative;min-height:0;border-radius:14px;overflow:hidden;background:var(--sea);border:1px solid var(--line)}
+#map{width:100%;height:100%;display:block;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
+#map:active{cursor:grabbing}
+.zoomctl{position:absolute;right:10px;top:10px;display:flex;flex-direction:column;gap:4px}
+.zoomctl button{width:36px;height:36px;border-radius:9px;border:1px solid var(--line);background:var(--panel);font-size:18px;font-weight:700;line-height:1}
+.maphint{position:absolute;left:12px;bottom:10px;font-size:12px;color:var(--muted);background:color-mix(in srgb,var(--panel) 80%,transparent);padding:3px 8px;border-radius:6px}
+.toast{position:absolute;left:50%;top:12px;transform:translate(-50%,-6px);opacity:0;transition:opacity .2s,transform .2s;
+  background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 14px;font-weight:700;pointer-events:none;white-space:nowrap;max-width:80%;overflow:hidden;text-overflow:ellipsis}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.toast.ok{color:var(--ok);border-color:var(--ok)} .toast.bad{color:var(--bad);border-color:var(--bad)}
+
+/* map layers */
+.land{fill:var(--land);stroke:var(--coast);stroke-width:.7}
+.borders{fill:none;stroke:var(--border);stroke-width:.6}
+.grat{fill:none;stroke:var(--grat);stroke-width:.5}
+.land,.borders,.grat,.rv path{vector-effect:non-scaling-stroke}
+.sea text{font-family:var(--f-sea);font-style:italic;font-size:13px;fill:var(--muted);text-anchor:middle;paint-order:stroke;stroke:var(--sea);stroke-width:3px;opacity:.9}
+.sea .big{font-size:16px;letter-spacing:.06em}
+.study .sea .main-sea{fill:var(--c)}
+
+.rv{cursor:pointer}
+.rv.off,.rl.off{display:none}
+.rv path{fill:none;stroke-linecap:round;stroke-linejoin:round}
+.rv .hit{stroke:transparent;stroke-width:22;pointer-events:stroke}
+.rv .case{stroke:var(--river-case);stroke-width:5.5;opacity:.8}
+.rv .main{stroke:var(--river);stroke-width:2.6;transition:stroke .2s}
+.rv .glow{stroke:var(--accent);stroke-width:13;opacity:0}
+.study .rv .main,.rv.found .main{stroke:var(--c)}
+.rv:hover .main,.rv.hot .main{stroke-width:4.2}
+.rv.hot .glow{opacity:.35;stroke:var(--ink)}
+.rv.target .main{stroke-width:4.2}
+.rv.target .glow{animation:glow 1s ease-in-out infinite alternate}
+.rv.done .main{stroke:var(--ok)}
+.rv.flash-ok .glow{opacity:.55;stroke:var(--ok)}
+.rv.flash-bad .glow{opacity:.55;stroke:var(--bad)}
+.rv.flash-bad .main{stroke:var(--bad)}
+@keyframes glow{from{opacity:.15}to{opacity:.65}}
+
+.rl{pointer-events:none}
+.rl .mouth{stroke:var(--halo);stroke-width:1.6;fill:var(--river)}
+.study .rl .mouth,.rl.found .mouth{fill:var(--c)}
+.rl .lab{font-size:13px;font-weight:700;paint-order:stroke;stroke:var(--halo);stroke-width:3.5px;stroke-linejoin:round;opacity:0;fill:var(--ink)}
+.study .rl .lab,.rl.found .lab{fill:var(--c)}
+.study.labels .rl .lab,.rl.reveal .lab,.rl.done .lab,.rl.found .lab{opacity:1}
+
+/* panel */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;display:flex;flex-direction:column;min-height:0;min-width:0;overflow:hidden}
+.ph{padding:14px 16px 10px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:10px}
+.ph h2{margin:0;font-family:var(--f-display);font-weight:600;font-size:19px;line-height:1.15;text-wrap:balance}
+.ph p{margin:0;color:var(--muted);font-size:13.5px}
+.pb{padding:12px 16px 16px;overflow:auto;min-height:0;flex:1;display:flex;flex-direction:column;gap:14px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.field{display:flex;flex-direction:column;gap:4px;flex:1;min-width:150px}
+.field label{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:700}
+select,input[type=text]{font:inherit;padding:8px 10px;border-radius:9px;border:1px solid var(--line);background:var(--bg);color:var(--ink);width:100%}
+.btn{border:1px solid var(--line);background:var(--bg);padding:8px 14px;border-radius:9px;font-weight:700}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn:hover{border-color:var(--accent)}
+.toggle{display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px;cursor:pointer}
+.toggle input{width:18px;height:18px;accent-color:var(--accent)}
+
+.sec h3{margin:0 0 6px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;display:flex;align-items:center;gap:8px}
+.sec h3 .n{color:var(--muted);font-weight:400;letter-spacing:0;text-transform:none}
+.sw{width:12px;height:4px;border-radius:2px;flex:none;background:currentColor}
+.items{display:flex;flex-direction:column;gap:2px;margin:0;padding:0;list-style:none}
+.item{display:flex;align-items:center;gap:10px;width:100%;text-align:left;border:0;background:none;padding:6px 8px;border-radius:8px}
+.item:hover,.item.active{background:var(--bg)}
+.item .nm{flex:1;min-width:0;font-weight:700}
+.item .note{display:block;font-size:12px;color:var(--muted);font-weight:400}
+.pips{display:flex;gap:3px}
+.pips i{width:6px;height:6px;border-radius:50%;background:var(--line)}
+.pips i.on{background:var(--ok)}
+
+.progress{height:8px;border-radius:99px;background:var(--bg);overflow:hidden;border:1px solid var(--line)}
+.progress span{display:block;height:100%;background:var(--ok);transition:width .3s}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:inline-flex;align-items:center;gap:7px;padding:7px 12px;border-radius:99px;border:1.5px solid var(--line);background:var(--panel);font-weight:700;font-size:14px;touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab}
+.chip.sel{border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 25%,transparent)}
+.chip.shake{animation:shake .35s}
+.ghost{position:fixed;left:0;top:0;z-index:50;pointer-events:none;box-shadow:0 8px 20px rgb(0 0 0 / .25);cursor:grabbing}
+@keyframes shake{25%{transform:translateX(-6px)}50%{transform:translateX(6px)}75%{transform:translateX(-3px)}}
+
+.ask{border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--bg);display:flex;flex-direction:column;gap:6px}
+.ask .k{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.ask .q{font-family:var(--f-display);font-weight:800;font-size:24px;line-height:1.1;text-wrap:balance}
+.fb{font-weight:700;min-height:1.4em}
+.fb.ok{color:var(--ok)} .fb.bad{color:var(--bad)} .fb.near{color:var(--c-atl)}
+.fb small{display:block;font-weight:400;color:var(--muted);font-size:13px}
+.opts{display:grid;grid-template-columns:1fr;gap:8px}
+.opt{border:1.5px solid var(--line);background:var(--panel);border-radius:10px;padding:11px 10px;font-weight:700;text-align:left;display:flex;gap:10px;align-items:center}
+.opt kbd{font-family:var(--f-body);font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 5px}
+.opt .sw{width:16px;height:5px}
+.opt:hover:not(:disabled){border-color:var(--accent)}
+.opt.right{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 14%,var(--panel))}
+.opt.wrong{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 14%,var(--panel))}
+.opt:disabled{cursor:default}
+.tform{display:flex;gap:8px}
+.tform input{font-size:18px;font-weight:700;padding:10px 12px}
+.hint{font-family:ui-monospace,Consolas,monospace;font-size:17px;letter-spacing:.25em;font-weight:700}
+.summary{display:flex;flex-direction:column;gap:10px}
+.big{font-family:var(--f-display);font-weight:800;font-size:44px;line-height:1;font-variant-numeric:tabular-nums}
+.missed{display:flex;flex-wrap:wrap;gap:6px}
+.missed span{font-size:13px;padding:3px 9px;border-radius:99px;background:color-mix(in srgb,var(--bad) 12%,var(--bg));color:var(--bad);font-weight:700}
+.muted{color:var(--muted);font-size:13px}
+
+.recall{display:flex;flex-direction:column;gap:6px}
+.recall .slot{display:flex;align-items:center;gap:8px}
+.recall .slot input{flex:1}
+.recall .slot .mk{width:20px;text-align:center;font-weight:700}
+.recall input.ok{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 12%,var(--bg))}
+.recall input.bad{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 10%,var(--bg))}
+.recall .why{font-size:12.5px;color:var(--muted);margin-left:28px}
+.sol{font-size:13px;color:var(--muted)}
+
+@media (max-width:820px){
+  html,body{height:auto}
+  .app{height:auto}
+  .stage{grid-template-columns:1fr}
+  .mapwrap{height:62svh;min-height:340px}
+  .pb{overflow:visible}
+  .score{margin-left:0}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <span class="eyebrow">Medi Social · 6è</span>
+      <h1>Rius d'Europa<small>13 rius</small></h1>
+    </div>
+    <nav class="modes" role="tablist" aria-label="Mode">
+      <button role="tab" data-mode="estudia" aria-selected="true">Estudia</button>
+      <button role="tab" data-mode="colloca" aria-selected="false">Col·loca</button>
+      <button role="tab" data-mode="troba" aria-selected="false">Troba-ho</button>
+      <button role="tab" data-mode="escriu" aria-selected="false">Escriu el nom</button>
+      <button role="tab" data-mode="desemboca" aria-selected="false">On desemboca?</button>
+      <button role="tab" data-mode="permars" aria-selected="false">Per mars</button>
+    </nav>
+    <div class="score" id="score" aria-live="polite"></div>
+  </header>
+  <main class="stage">
+    <section class="mapwrap" aria-label="Mapa d'Europa">
+      <svg id="map" role="img" aria-label="Mapa dels rius d'Europa"></svg>
+      <div class="zoomctl">
+        <button id="zin" aria-label="Apropa">+</button>
+        <button id="zout" aria-label="Allunya">−</button>
+        <button id="zreset" aria-label="Mapa sencer">⤢</button>
+      </div>
+      <div class="maphint">Roda o pinça per fer zoom · arrossega per moure't</div>
+      <div class="toast" id="toast"></div>
+    </section>
+    <aside class="panel" id="panel"></aside>
+  </main>
+</div>
+<div id="ghost" class="chip ghost" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/d3@7.8.5/dist/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+<script src="mapa.js"></script>
+<script>
+// Vessants tal com surten al guió d'estudi
+const VESS=[
+  {k:'med',  name:'Mediterrani', sea:'al mar Mediterrani'},
+  {k:'caspi',name:'Mar Caspi',   sea:'al mar Caspi'},
+  {k:'negre',name:'Mar Negre',   sea:'al mar Negre'},
+  {k:'atl',  name:'Atlàntic',    sea:'a l’oceà Atlàntic'},
+  {k:'artic',name:'Àrtic',       sea:'a l’oceà Glacial Àrtic'},
+];
+// line: traç del riu des del naixement fins a la desembocadura [lon,lat] · lab: on va el nom i [dx,dy,alineació]
+const RIVERS=[
+  {id:'ebre',n:'Ebre',v:'med',km:910,mouth:'Delta de l’Ebre, mar Mediterrani',alias:['ebro'],at:[-1.4,41.95],lab:[0,18,'middle'],
+    line:[[-4.15,43.0],[-3.7,42.85],[-3.2,42.75],[-2.95,42.68],[-2.45,42.47],[-1.95,42.3],[-1.6,42.06],[-1.25,41.85],[-0.88,41.65],[-0.45,41.4],[-0.04,41.25],[0.3,41.37],[0.55,41.23],[0.64,41.09],[0.52,40.81],[0.86,40.72]]},
+  {id:'po',n:'Po',v:'med',km:652,mouth:'Mar Adriàtic (Mediterrani)',alias:[],at:[10.4,45.02],lab:[0,-11,'middle'],
+    line:[[7.09,44.7],[7.45,44.85],[7.69,45.07],[7.89,45.19],[8.45,45.13],[8.64,45.02],[9.2,45.12],[9.69,45.05],[10.02,45.13],[10.42,44.99],[10.75,45.05],[11.14,45.07],[11.6,44.92],[12.0,44.95],[12.45,44.95]]},
+  {id:'roine',n:'Roine',v:'med',km:812,mouth:'Golf de Lleó (Mediterrani)',alias:['rodan','rhone','rodano'],at:[4.85,45.1],lab:[-9,4,'end'],
+    line:[[8.38,46.58],[7.99,46.32],[7.36,46.23],[7.07,46.1],[6.92,46.38],[6.6,46.45],[6.3,46.38],[6.15,46.2],[5.82,46.1],[5.6,45.75],[5.2,45.8],[4.83,45.75],[4.87,45.52],[4.89,44.93],[4.72,44.55],[4.8,43.95],[4.63,43.68],[4.72,43.4]]},
+
+  {id:'volga',n:'Volga',v:'caspi',km:3530,mouth:'Mar Caspi',note:'El riu més llarg d’Europa',alias:[],at:[46,56.15],lab:[0,-11,'middle'],
+    line:[[32.9,57.25],[33.8,56.8],[34.33,56.26],[35.0,56.6],[35.9,56.86],[37.17,56.73],[38.0,57.4],[38.85,58.05],[39.88,57.63],[40.93,57.77],[42.2,57.4],[43.3,56.6],[44.0,56.33],[45.5,56.1],[47.25,56.13],[48.5,55.9],[49.1,55.78],[49.4,55.2],[48.4,54.32],[48.9,53.6],[49.4,53.5],[50.1,53.2],[49.0,53.0],[48.45,53.15],[47.8,52.5],[46.9,52.0],[46.03,51.53],[45.4,50.1],[44.5,48.7],[45.3,48.0],[46.6,47.1],[48.03,46.35],[48.6,45.95]]},
+  {id:'ural',n:'Ural',v:'caspi',km:2428,mouth:'Mar Caspi',note:'Fa de frontera entre Europa i Àsia',alias:[],at:[55.5,51.7],lab:[0,-11,'middle'],
+    line:[[59.5,54.5],[59.1,53.4],[59.0,52.5],[58.57,51.2],[57.4,51.4],[56.2,51.7],[55.1,51.77],[53.5,51.5],[52.3,51.2],[51.37,51.23],[51.3,50.0],[51.5,49.0],[51.6,48.0],[51.92,47.1],[51.85,46.85]]},
+
+  {id:'dnieper',n:'Dnièper',v:'negre',km:2201,mouth:'Mar Negre',alias:['dniepr','dnieper','dnipro','dnieprer'],at:[30.35,52.6],lab:[-9,4,'end'],
+    line:[[33.4,55.9],[33.3,54.92],[32.05,54.78],[30.4,54.5],[30.33,53.9],[30.05,53.1],[30.4,52.36],[30.6,51.3],[30.52,50.45],[31.5,49.9],[32.5,49.5],[33.42,49.07],[34.4,48.6],[35.05,48.45],[35.15,47.85],[34.4,47.57],[33.6,47.0],[32.6,46.63],[31.9,46.58]]},
+  {id:'don',n:'Don',v:'negre',km:1870,mouth:'Mar d’Azov (unit al mar Negre)',alias:[],at:[41.6,49.75],lab:[0,-11,'middle'],
+    line:[[38.3,54.0],[38.9,53.2],[39.2,52.5],[39.1,51.6],[39.5,50.98],[40.1,50.45],[41.0,49.9],[42.2,49.5],[43.2,49.4],[43.53,48.69],[42.8,48.0],[42.1,47.65],[41.0,47.5],[40.1,47.5],[39.7,47.22],[39.25,47.12]]},
+  {id:'danubi',n:'Danubi',v:'negre',km:2850,mouth:'Mar Negre',note:'Travessa 10 països',alias:['danubio','danube','donau'],at:[24.6,43.7],lab:[0,19,'middle'],
+    line:[[8.5,47.95],[9.2,48.1],[9.99,48.4],[10.9,48.7],[11.42,48.76],[12.1,49.02],[12.9,48.8],[13.46,48.57],[14.29,48.31],[15.3,48.3],[16.37,48.21],[17.1,48.14],[18.12,47.76],[18.74,47.79],[19.05,47.5],[18.95,46.8],[18.68,45.99],[19.0,45.35],[19.85,45.25],[20.46,44.82],[21.4,44.75],[22.5,44.65],[22.6,44.3],[22.87,43.99],[23.8,43.75],[24.9,43.7],[25.95,43.85],[27.26,44.12],[27.95,44.68],[27.97,45.27],[28.05,45.43],[28.8,45.17],[29.65,45.2]]},
+
+  {id:'vistula',n:'Vístula',v:'atl',km:1047,mouth:'Mar Bàltic (Atlàntic)',alias:['wisla'],at:[21.6,51.6],lab:[9,4,'start'],
+    line:[[19.0,49.6],[19.4,49.95],[19.94,50.05],[20.8,50.3],[21.75,50.68],[21.95,51.42],[21.5,51.95],[21.02,52.23],[20.5,52.4],[19.7,52.55],[19.07,52.65],[18.6,53.01],[18.1,53.1],[18.75,53.48],[18.78,54.09],[18.95,54.35]]},
+  {id:'oder',n:'Oder',v:'atl',km:854,mouth:'Mar Bàltic (Atlàntic)',alias:['odra'],at:[16.4,51.5],lab:[-9,4,'end'],
+    line:[[17.6,49.62],[18.0,49.8],[18.28,49.83],[18.22,50.09],[17.92,50.67],[17.5,50.9],[17.03,51.11],[16.5,51.4],[16.08,51.66],[15.72,51.8],[15.0,52.05],[14.55,52.35],[14.65,52.59],[14.28,53.06],[14.55,53.43],[14.4,53.75]]},
+  {id:'rin',n:'Rin',v:'atl',km:1233,mouth:'Mar del Nord (Atlàntic)',alias:['rhin','rhine','rhein'],at:[7.5,50.5],lab:[-9,4,'end'],
+    line:[[8.67,46.63],[8.85,46.7],[9.53,46.85],[9.55,47.25],[9.6,47.48],[9.17,47.67],[8.86,47.66],[8.63,47.7],[8.2,47.6],[7.59,47.56],[7.6,48.1],[7.8,48.58],[8.3,49.0],[8.46,49.49],[8.27,50.0],[7.9,49.97],[7.6,50.36],[7.1,50.73],[6.96,50.94],[6.77,51.22],[6.75,51.43],[6.25,51.83],[5.86,51.85],[5.2,51.85],[4.48,51.92],[4.05,51.98]]},
+
+  {id:'petxora',n:'Petxora',v:'artic',km:1809,mouth:'Mar de Barentsz (Àrtic)',alias:['pechora','petchora','pexora'],at:[57.1,64.7],lab:[9,4,'start'],
+    line:[[59.4,61.9],[58.6,62.3],[57.4,62.4],[56.2,62.7],[56.6,63.3],[57.3,63.85],[57.0,64.6],[57.2,65.15],[55.5,65.2],[54.0,65.4],[52.15,65.43],[52.0,66.2],[52.6,67.0],[53.05,67.65],[53.8,68.25]]},
+  {id:'dvina',n:'Dvina Septentrional',v:'artic',km:744,mouth:'Mar Blanc (Àrtic)',alias:['dvina','dvina del nord','dvina nord','dvina septentrional'],at:[43.2,62.6],lab:[-9,4,'end'],
+    line:[[39.9,59.5],[41.0,59.7],[42.75,59.97],[44.3,60.2],[45.5,60.6],[46.3,60.76],[46.65,61.25],[45.7,61.7],[44.5,62.2],[43.2,62.6],[42.7,62.85],[42.2,63.5],[41.9,64.22],[40.9,64.4],[40.55,64.55],[40.3,64.72]]},
+];
+const SEAS=[
+  {n:'Mar Mediterrani',at:[18.5,34.3],v:'med'},
+  {n:'Mar Caspi',at:[51,42.4],v:'caspi'},
+  {n:'Mar Negre',at:[34,43.4],v:'negre'},
+  {n:'Oceà Atlàntic',at:[-17,46],v:'atl',big:true},
+  {n:'Oceà Glacial Àrtic',at:[8,74.5],v:'artic',big:true},
+  {n:'Mar del Nord',at:[3.5,56.3]},
+  {n:'Mar Bàltic',at:[18.6,55.7]},
+  {n:'Mar de Barentsz',at:[42,72.3]},
+  {n:'Mar Blanc',at:[37.2,66.2]},
+];
+const BY=Object.fromEntries(RIVERS.map(d=>[d.id,d]));
+const vName=k=>VESS.find(s=>s.k===k).name;
+const col=k=>`var(--c-${k})`;
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ---------- comparació de respostes escrites ---------- */
+const deacc=s=>s.normalize('NFD').replace(/[̀-ͯ]/g,'');
+const norm=s=>deacc(String(s).toLowerCase().trim()).replace(/^(el\s+)?(riu\s+)/,'').replace(/^(el|la|l')\s*/,'').replace(/[^a-z]/g,'');
+const names=d=>[d.n,...(d.alias||[])].map(norm);
+function lev(a,b){const m=a.length,n=b.length;let p=Array.from({length:n+1},(_,j)=>j);for(let i=1;i<=m;i++){const c=[i];for(let j=1;j<=n;j++)c[j]=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1));p=c}return p[n]}
+function check(d,v){
+  const nv=norm(v);
+  if(!nv)return {empty:true};
+  if(names(d).includes(nv)){
+    let note='';
+    if(nv!==norm(d.n))note=`Al guió s’escriu «${d.n}».`;
+    else if(v.trim().toLowerCase().replace(/^(el\s+)?riu\s+/,'')!==d.n.toLowerCase())note=`Fixa’t en com s’escriu: «${d.n}».`;
+    return {ok:true,note};
+  }
+  const other=RIVERS.find(r=>r!==d&&names(r).includes(nv));
+  if(other)return {other};
+  const lim=nv.length<=3?1:2;
+  if(names(d).some(x=>lev(nv,x)<=lim))return {near:true};
+  return {};
+}
+
+/* ---------- progrés guardat en aquest navegador ---------- */
+const KEY='rius-europa-v1';
+let stats={};
+try{stats=JSON.parse(localStorage.getItem(KEY))||{}}catch(e){stats={}}
+function record(id,ok){
+  const s=stats[id]||(stats[id]={ok:0,ko:0});
+  ok?s.ok++:s.ko++;
+  try{localStorage.setItem(KEY,JSON.stringify(stats))}catch(e){}
+}
+const level=id=>{const s=stats[id];return s?Math.max(0,Math.min(3,s.ok-s.ko)):0};
+
+/* ---------- mapa ---------- */
+const W=1000,H=800;
+const svg=d3.select('#map').attr('viewBox',`0 0 ${W} ${H}`).attr('preserveAspectRatio','xMidYMid meet');
+const proj=d3.geoConicConformal().parallels([40,68]).rotate([-18,0])
+  .fitExtent([[0,0],[W,H]],{type:'MultiPoint',coordinates:[[-24,34],[-26,66],[64,40],[62,70],[18,32.5],[18,76.5]]});
+proj.clipExtent([[-W,-H],[2*W,2*H]]);
+const path=d3.geoPath(proj);
+const world=window.WORLD;
+const land=topojson.feature(world,world.objects.land||world.objects.countries);
+const gZ=svg.append('g');
+gZ.append('path').attr('class','grat').attr('d',path(d3.geoGraticule().step([10,10])()));
+gZ.append('path').attr('class','land').attr('d',path(land));
+gZ.append('path').attr('class','borders').attr('d',path(topojson.mesh(world,world.objects.countries,(a,b)=>a!==b)));
+
+// rius
+const lineGen=d3.line().curve(d3.curveCatmullRom.alpha(.5));
+const gRiv=gZ.append('g');
+RIVERS.forEach(d=>{
+  d.xy=proj(d.at);d.pxs=d.line.map(p=>proj(p));
+  const g=gRiv.append('g').attr('class','rv').attr('data-id',d.id).style('--c',col(d.v));
+  const dd=lineGen(d.pxs);
+  ['glow','case','main','hit'].forEach(c=>g.append('path').attr('class',c).attr('d',dd));
+  d.rv=g;
+});
+
+// noms dels mars (escala fixa com els marcadors)
+const gSea=gZ.append('g').attr('class','sea');
+const seaT=gSea.selectAll('text').data(SEAS).join('text')
+  .attr('class',d=>(d.big?'big ':'')+(d.v?'main-sea':'')).style('--c',d=>d.v?col(d.v):null).text(d=>d.n);
+
+// etiquetes i desembocadura de cada riu
+const gLab=gZ.append('g');
+RIVERS.forEach(d=>{
+  const m=d.pxs[d.pxs.length-1];
+  const a=gLab.append('g').attr('class','rl').attr('data-id',d.id).style('--c',col(d.v));
+  d.mouthEl=a.append('circle').attr('class','mouth').attr('r',4);
+  d.labEl=a.append('text').attr('class','lab').attr('x',d.lab[0]).attr('y',d.lab[1]).attr('text-anchor',d.lab[2]).text(d.n);
+  d.m=m;d.rl=a;
+});
+const rvAll=gRiv.selectAll('.rv'),rlAll=gLab.selectAll('.rl');
+
+let K=1;
+const place=()=>{
+  RIVERS.forEach(d=>{d.labEl.attr('transform',`translate(${d.xy[0]},${d.xy[1]}) scale(${1/K})`);d.mouthEl.attr('transform',`translate(${d.m[0]},${d.m[1]}) scale(${1/K})`)});
+  seaT.attr('transform',s=>{const p=proj(s.at);return `translate(${p[0]},${p[1]}) scale(${1/K})`});
+};
+const zoom=d3.zoom().scaleExtent([1,10]).translateExtent([[-W*.3,-H*.3],[W*1.3,H*1.3]])
+  .on('zoom',e=>{gZ.attr('transform',e.transform);K=e.transform.k;place()});
+svg.call(zoom).on('dblclick.zoom',null);
+place();
+const T=()=>reduce?svg:svg.transition().duration(650);
+document.getElementById('zin').onclick=()=>T().call(zoom.scaleBy,1.6);
+document.getElementById('zout').onclick=()=>T().call(zoom.scaleBy,1/1.6);
+document.getElementById('zreset').onclick=()=>T().call(zoom.transform,d3.zoomIdentity);
+function flyTo(d){
+  const xs=d.pxs.map(p=>p[0]),ys=d.pxs.map(p=>p[1]);
+  const bw=Math.max(...xs)-Math.min(...xs)+80,bh=Math.max(...ys)-Math.min(...ys)+80;
+  const s=Math.min(3.5,Math.max(1.4,Math.min(W/bw,H/bh)*.7));
+  const cx=(Math.max(...xs)+Math.min(...xs))/2,cy=(Math.max(...ys)+Math.min(...ys))/2;
+  T().call(zoom.transform,d3.zoomIdentity.translate(W/2,H/2).scale(s).translate(-cx,-cy));
+}
+
+/* ---------- utilitats d'interfície ---------- */
+const $=s=>document.querySelector(s);
+const panel=$('#panel'),scoreEl=$('#score'),toastEl=$('#toast');
+let toastT;
+function toast(msg,kind){toastEl.textContent=msg;toastEl.className=`toast show ${kind||''}`;clearTimeout(toastT);toastT=setTimeout(()=>toastEl.className='toast',1600)}
+const cls=(d,c,on)=>{d.rv.classed(c,on);d.rl.classed(c,on)};
+function flash(d,kind){const c='flash-'+kind;cls(d,c,true);setTimeout(()=>cls(d,c,false),900)}
+function clearMarks(){['done','reveal','target','hot','found','flash-ok','flash-bad'].forEach(c=>{rvAll.classed(c,false);rlAll.classed(c,false)})}
+let poolV='all';
+const pool=()=>RIVERS.filter(d=>poolV==='all'||d.v===poolV);
+function setPool(all){
+  const ids=new Set((all?RIVERS:pool()).map(d=>d.id));
+  RIVERS.forEach(d=>cls(d,'off',!ids.has(d.id)));
+}
+function poolSelect(){
+  return `<div class="field"><label for="pool">Què vols practicar?</label><select id="pool">
+    <option value="all"${poolV==='all'?' selected':''}>Tots (13 rius)</option>
+    ${VESS.map(s=>`<option value="${s.k}"${poolV===s.k?' selected':''}>Vessant ${s.name} (${RIVERS.filter(d=>d.v===s.k).length})</option>`).join('')}
+  </select></div>`;
+}
+function bindPool(){const el=$('#pool');if(el)el.onchange=()=>{poolV=el.value;start(mode)}}
+const swatch=k=>`<span class="sw" style="color:${col(k)}"></span>`;
+
+/* ---------- modes ---------- */
+let mode='estudia';
+let onRiver=()=>{};
+rvAll.on('click',(e)=>{e.stopPropagation();const d=BY[e.currentTarget.dataset.id];onRiver(d)});
+document.querySelectorAll('.modes button').forEach(b=>b.onclick=()=>start(b.dataset.mode));
+
+function start(m){
+  mode=m;
+  document.querySelectorAll('.modes button').forEach(b=>b.setAttribute('aria-selected',b.dataset.mode===m));
+  svg.classed('study labels',false);
+  document.onkeydown=null;
+  clearMarks();setPool(m==='permars');scoreEl.innerHTML='';onRiver=()=>{};
+  ({estudia:study,colloca:placeGame,troba:findGame,escriu:typeGame,desemboca:mouthGame,permars:recallGame})[m]();
+}
+
+/* Estudia */
+let hideLabels=false;
+function study(){
+  svg.classed('study',true).classed('labels',!hideLabels);
+  const secs=VESS.filter(s=>poolV==='all'||s.k===poolV);
+  panel.innerHTML=`<div class="ph"><h2>Estudia el mapa</h2>
+    <p>Els rius estan pintats segons el mar on desemboquen, amb els mateixos colors del guió. Toca un riu per anar-hi.</p>
+    <div class="row">${poolSelect()}</div>
+    <label class="toggle"><input type="checkbox" id="hide"${hideLabels?' checked':''}> Amaga els noms del mapa</label></div>
+    <div class="pb">${secs.map(s=>{const its=RIVERS.filter(d=>d.v===s.k);return `<section class="sec">
+      <h3 style="color:${col(s.k)}">${swatch(s.k)}<span>${s.name}</span><span class="n">${its.length} rius</span></h3>
+      <ul class="items">${its.map(d=>`<li><button class="item" data-id="${d.id}">
+        <span class="nm">${esc(d.n)}<span class="note">${d.note?esc(d.note)+' · ':''}${esc(d.mouth)} · ≈ ${d.km.toLocaleString('ca')} km</span></span>
+        <span class="pips" title="Encerts a les proves">${[0,1,2].map(i=>`<i class="${i<level(d.id)?'on':''}"></i>`).join('')}</span>
+      </button></li>`).join('')}</ul></section>`}).join('')}
+      <p class="muted">El Vístula, l’Oder i el Rin desemboquen al mar Bàltic i al mar del Nord, que formen part de l’oceà Atlàntic. El punt al final de cada riu marca on desemboca.</p>
+      <div class="row"><button class="btn" id="reset-stats">Esborra el progrés</button></div>
+    </div>`;
+  bindPool();
+  $('#hide').onchange=e=>{hideLabels=e.target.checked;svg.classed('labels',!hideLabels)};
+  const focus=d=>{
+    clearMarks();cls(d,'target',true);cls(d,'reveal',true);d.rv.raise();flyTo(d);
+    panel.querySelectorAll('.item').forEach(b=>b.classList.toggle('active',b.dataset.id===d.id));
+  };
+  panel.querySelectorAll('.item').forEach(b=>b.onclick=()=>focus(BY[b.dataset.id]));
+  onRiver=d=>{focus(d);const b=panel.querySelector(`.item[data-id="${d.id}"]`);b&&b.scrollIntoView({block:'nearest',behavior:reduce?'auto':'smooth'})};
+  let armed=false;
+  $('#reset-stats').onclick=e=>{
+    if(!armed){armed=true;e.target.textContent='Segur? Torna a tocar';return}
+    stats={};try{localStorage.removeItem(KEY)}catch(_){ }study();
+  };
+}
+
+/* Col·loca (arrossega noms sobre els rius) */
+function placeGame(){
+  const items=pool();let placed=new Set(),errors=0,selected=null;
+  const sc=()=>scoreEl.innerHTML=`<span class="ok">✓ ${placed.size}/${items.length}</span><span class="bad">✗ ${errors}</span>`;
+  const render=()=>{
+    const left=shuffle(items.filter(d=>!placed.has(d.id)));sc();
+    panel.innerHTML=`<div class="ph"><h2>Col·loca els noms</h2>
+      <p>Arrossega cada nom fins al seu riu. També pots tocar un nom i després tocar el riu.</p>
+      <div class="row">${poolSelect()}</div>
+      <div class="progress" aria-hidden="true"><span style="width:${placed.size/items.length*100}%"></span></div></div>
+      <div class="pb">${left.length?`<div class="chips">${left.map(d=>`<span class="chip" data-id="${d.id}" role="button" tabindex="0">${esc(d.n)}</span>`).join('')}</div>`
+        :`<div class="summary"><span class="eyebrow">Mapa complet</span><div class="big">${items.length}/${items.length}</div>
+          <p>${errors===0?'Cap error. Perfecte!':`Ho has aconseguit amb ${errors} ${errors===1?'error':'errors'}.`}</p>
+          <div class="row"><button class="btn primary" id="again">Torna-hi</button></div></div>`}
+        <p class="muted">Consell: fes zoom per separar el Vístula i l’Oder, que estan molt a prop.</p></div>`;
+    bindPool();
+    const again=$('#again');if(again)again.onclick=()=>start('colloca');
+    panel.querySelectorAll('.chip').forEach(bindChip);
+  };
+  const tryPlace=(d,target,chipEl)=>{
+    if(!target)return;
+    if(target.id===d.id){
+      placed.add(d.id);record(d.id,true);cls(d,'done',true);flash(d,'ok');
+      toast(`Correcte: ${d.n}`,'ok');selected=null;render();
+    }else if(placed.has(target.id)){toast('Aquest riu ja té el seu nom');}
+    else{errors++;record(d.id,false);flash(target,'bad');toast(`Aquest no és el ${d.n}`,'bad');
+      if(chipEl){chipEl.classList.remove('shake');void chipEl.offsetWidth;chipEl.classList.add('shake')}
+      sc();}
+  };
+  const riverAt=(x,y)=>{const el=document.elementFromPoint(x,y);const g=el&&el.closest&&el.closest('.rv');return g&&!g.classList.contains('off')?BY[g.dataset.id]:null};
+  const ghost=$('#ghost');
+  function bindChip(el){
+    const d=BY[el.dataset.id];let sx,sy,drag=false,hot=null;
+    const setHot=n=>{if(n!==hot){hot&&cls(hot,'hot',false);hot=n;hot&&cls(hot,'hot',true)}};
+    el.onpointerdown=e=>{e.preventDefault();sx=e.clientX;sy=e.clientY;drag=false;el.setPointerCapture(e.pointerId)};
+    el.onpointermove=e=>{
+      if(sx==null)return;
+      if(!drag&&Math.hypot(e.clientX-sx,e.clientY-sy)>6){drag=true;ghost.innerHTML=el.innerHTML;ghost.hidden=false;el.style.opacity=.35}
+      if(drag){
+        ghost.style.transform=`translate(${e.clientX-ghost.offsetWidth/2}px,${e.clientY-ghost.offsetHeight-14}px)`;
+        setHot(riverAt(e.clientX,e.clientY));
+      }
+    };
+    el.onpointerup=e=>{
+      if(sx==null)return;sx=null;
+      if(drag){ghost.hidden=true;el.style.opacity='';setHot(null);tryPlace(d,riverAt(e.clientX,e.clientY),el)}
+      else{selected=selected===d?null:d;panel.querySelectorAll('.chip').forEach(c=>c.classList.toggle('sel',selected&&c.dataset.id===selected.id))}
+    };
+    el.onpointercancel=()=>{sx=null;ghost.hidden=true;el.style.opacity='';setHot(null)};
+    el.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selected=d;panel.querySelectorAll('.chip').forEach(c=>c.classList.toggle('sel',c===el))}};
+  }
+  onRiver=t=>{if(selected)tryPlace(selected,t,panel.querySelector(`.chip[data-id="${selected.id}"]`));else if(!placed.has(t.id))toast('Primer tria un nom de la llista')};
+  render();
+}
+
+/* Motor comú de preguntes */
+function quiz({title,intro,askFor,setup,replay}){
+  let queue=shuffle(replay||pool()),i=0,ok=0,ko=0,missed=[],locked=false;
+  const showScore=()=>scoreEl.innerHTML=`<span class="ok">✓ ${ok}</span><span class="bad">✗ ${ko}</span>`;
+  const next=()=>{
+    clearMarks();locked=false;
+    if(i>=queue.length)return finish();
+    const d=queue[i];showScore();
+    panel.innerHTML=`<div class="ph"><h2>${title}</h2><p>${intro}</p>${replay?'':`<div class="row">${poolSelect()}</div>`}
+      <div class="progress" aria-hidden="true"><span style="width:${i/queue.length*100}%"></span></div></div>
+      <div class="pb"><div class="ask"><span class="k">Pregunta ${i+1} de ${queue.length}</span>${askFor(d)}</div>
+      <div id="qbody"></div><div class="fb" id="fb" aria-live="polite"></div>
+      <div class="row"><button class="btn" id="skip">No ho sé</button><button class="btn primary" id="nextb" hidden>Següent</button></div></div>`;
+    bindPool();
+    $('#skip').onclick=()=>resolve(d,false,'');
+    $('#nextb').onclick=()=>{i++;next()};
+    setup(d,(good,extra)=>resolve(d,good,extra||''));
+  };
+  const resolve=(d,good,extra)=>{
+    if(locked)return;locked=true;
+    record(d.id,good);good?ok++:ko++;if(!good)missed.push(d);showScore();
+    cls(d,'target',false);cls(d,'reveal',true);cls(d,'found',true);d.rv.raise();
+    const fb=$('#fb');fb.className='fb '+(good?'ok':'bad');
+    fb.innerHTML=(good?`Molt bé! És el ${esc(d.n)}.`:`Era el ${esc(d.n)}. Mira’l al mapa.`)
+      +`<small>Vessant ${esc(vName(d.v))} · desemboca ${esc(VESS.find(s=>s.k===d.v).sea)}${extra?'. '+esc(extra):''}</small>`;
+    panel.querySelectorAll('#qbody input,#qbody button').forEach(x=>x.disabled=true);
+    $('#skip').hidden=true;
+    const nb=$('#nextb');
+    if(good&&!extra)setTimeout(()=>{if(queue[i]===d&&locked){i++;next()}},reduce?700:1300);
+    else{nb.hidden=false;nb.focus({preventScroll:true})}
+  };
+  const finish=()=>{
+    const pct=Math.round(ok/queue.length*100);
+    panel.innerHTML=`<div class="ph"><h2>${title}</h2><div class="row">${poolSelect()}</div></div>
+      <div class="pb"><div class="summary"><span class="eyebrow">Resultat</span><div class="big">${ok}/${queue.length}</div>
+      <p>${pct===100?'Tots bé. Ja te’ls saps!':pct>=70?'Molt bé, ja quasi ho tens.':'Repassa els que has fallat i torna-hi.'}</p>
+      ${missed.length?`<div><p class="muted">Has fallat:</p><div class="missed">${missed.map(d=>`<span>${esc(d.n)}</span>`).join('')}</div></div>`:''}
+      <div class="row">${missed.length?'<button class="btn primary" id="retry">Repeteix els fallats</button>':''}<button class="btn" id="again">Torna a començar</button></div></div></div>`;
+    bindPool();
+    $('#again').onclick=()=>start(mode);
+    const r=$('#retry');if(r)r.onclick=()=>{const m=missed.slice();clearMarks();quiz({title,intro,askFor,setup,replay:m})};
+  };
+  next();
+  return {get locked(){return locked}};
+}
+
+/* Troba-ho: et dic el nom, tu toques el riu */
+function findGame(){
+  let q;
+  q=quiz({title:'Troba-ho al mapa',intro:'Toca el riu del mapa que té aquest nom.',
+    askFor:d=>`<div class="q">${esc(d.n)}</div>`,
+    setup:(d,done)=>{onRiver=t=>{if(q.locked)return;if(t.id===d.id){flash(t,'ok');done(true)}
+      else{flash(t,'bad');cls(t,'reveal',true);setTimeout(()=>cls(t,'reveal',false),1500);done(false,`Has tocat el ${t.n}`)}}}});
+}
+
+/* Escriu el nom: el mapa marca un riu i l'has d'escriure sense opcions */
+function typeGame(){
+  quiz({title:'Escriu el nom',intro:'Mira el riu que brilla al mapa i escriu com es diu. Compte amb l’ortografia i els accents.',
+    askFor:()=>`<div class="q">Com es diu aquest riu?</div>`,
+    setup:(d,done)=>{
+      cls(d,'target',true);d.rv.raise();
+      let tries=0,hint=0;
+      $('#qbody').innerHTML=`<form class="tform" id="tf" autocomplete="off">
+        <input type="text" id="ans" aria-label="Nom del riu" placeholder="Nom del riu" autocapitalize="off" autocorrect="off" spellcheck="false">
+        <button class="btn primary">Comprova</button></form>
+        <div class="row" style="margin-top:10px"><button class="btn" type="button" id="hintb">Pista</button><span class="hint" id="hintv"></span></div>`;
+      const inp=$('#ans'),fb=$('#fb');
+      if(matchMedia('(pointer:fine)').matches)inp.focus({preventScroll:true});
+      $('#hintb').onclick=()=>{
+        const letters=[...d.n].filter(c=>c!==' ').length;
+        hint=Math.min(hint+1,letters-1);let k=0;
+        $('#hintv').textContent=[...d.n].map(c=>c===' '?'  ':(k++<hint?c:'_')).join(' ');
+      };
+      $('#tf').onsubmit=e=>{
+        e.preventDefault();
+        const r=check(d,inp.value);
+        if(r.empty){fb.className='fb near';fb.textContent='Escriu el nom abans de comprovar.';return}
+        if(r.ok)return done(true,r.note);
+        if(r.near&&tries===0){tries++;fb.className='fb near';fb.textContent='Quasi! Revisa com s’escriu i torna-ho a provar.';inp.select();return}
+        done(false,r.other?`Has escrit ${r.other.n}, que és un altre riu`:`Has escrit «${inp.value.trim()}»`);
+      };
+    }});
+}
+
+/* On desemboca?: el mapa marca un riu i tries el mar */
+function mouthGame(){
+  quiz({title:'On desemboca?',intro:'Mira el riu marcat al mapa i tria a quin mar o oceà va a parar.',
+    askFor:d=>`<div class="q">On desemboca el ${esc(d.n)}?</div>`,
+    setup:(d,done)=>{
+      cls(d,'target',true);cls(d,'reveal',true);d.rv.raise();
+      $('#qbody').innerHTML=`<div class="opts">${VESS.map((s,j)=>`<button class="opt" data-k="${s.k}"><kbd>${j+1}</kbd>${swatch(s.k)}${esc(s.name)}</button>`).join('')}</div>`;
+      const btns=[...panel.querySelectorAll('.opt')];
+      const pick=b=>{if(b.disabled)return;btns.forEach(x=>{x.disabled=true;if(x.dataset.k===d.v)x.classList.add('right')});if(b.dataset.k!==d.v)b.classList.add('wrong');done(b.dataset.k===d.v)};
+      btns.forEach(b=>b.onclick=()=>pick(b));
+      document.onkeydown=e=>{const n=+e.key;if(n>=1&&n<=btns.length)pick(btns[n-1])};
+    }});
+}
+
+/* Per mars: escriu de memòria els rius de cada vessant */
+function recallGame(){
+  panel.innerHTML=`<div class="ph"><h2>Per mars</h2>
+    <p>Escriu de memòria els rius de cada vessant, com al guió. L’ordre no importa.</p></div>
+    <div class="pb"><form id="rf" autocomplete="off" class="recall">
+    ${VESS.map(s=>{const n=RIVERS.filter(d=>d.v===s.k).length;return `<section class="sec" data-k="${s.k}">
+      <h3 style="color:${col(s.k)}">${swatch(s.k)}<span>${s.name}</span><span class="n">${n} rius</span></h3>
+      ${Array.from({length:n},(_,i)=>`<div class="slot"><span class="mk" id="m-${s.k}-${i}"></span><input type="text" id="r-${s.k}-${i}" aria-label="${esc(s.name)}, riu ${i+1}" autocapitalize="off" autocorrect="off" spellcheck="false"></div><div class="why" id="w-${s.k}-${i}"></div>`).join('')}
+      <div class="sol" id="s-${s.k}" hidden></div></section>`}).join('')}
+    <div class="fb" id="rfb" aria-live="polite"></div>
+    <div class="row"><button class="btn primary">Comprova</button><button class="btn" type="button" id="showsol">Mostra les solucions</button><button class="btn" type="button" id="clear">Esborra-ho tot</button></div>
+    </form></div>`;
+  const run=()=>{
+    clearMarks();let good=0;
+    VESS.forEach(s=>{
+      const rs=RIVERS.filter(d=>d.v===s.k),used=new Set();
+      rs.forEach((_,i)=>{
+        const inp=$(`#r-${s.k}-${i}`),m=$(`#m-${s.k}-${i}`),w=$(`#w-${s.k}-${i}`);
+        inp.classList.remove('ok','bad');m.textContent='';w.textContent='';
+        const v=inp.value;if(!norm(v))return;
+        const hit=rs.find(d=>!used.has(d.id)&&check(d,v).ok);
+        if(hit){used.add(hit.id);good++;inp.classList.add('ok');m.textContent='✓';m.style.color='var(--ok)';cls(hit,'found',true);
+          const note=check(hit,v).note;if(note)w.textContent=note}
+        else{inp.classList.add('bad');m.textContent='✗';m.style.color='var(--bad)';
+          const other=RIVERS.find(d=>check(d,v).ok);
+          w.textContent=other?(other.v===s.k?`El ${other.n} ja l’has escrit.`:`El ${other.n} va ${VESS.find(x=>x.k===other.v).sea}.`)
+            :(rs.some(d=>check(d,v).near)?'Quasi! Revisa l’ortografia.':'')}
+      });
+      rs.forEach(d=>record(d.id,used.has(d.id)));
+    });
+    scoreEl.innerHTML=`<span class="ok">✓ ${good}/13</span>`;
+    const fb=$('#rfb');fb.className='fb '+(good===13?'ok':'bad');
+    fb.textContent=good===13?'Tots 13 correctes. Perfecte!':`Tens ${good} de 13. Corregeix els que estan en vermell.`;
+  };
+  $('#rf').onsubmit=e=>{e.preventDefault();run()};
+  $('#showsol').onclick=e=>{
+    const show=e.target.dataset.on!=='1';e.target.dataset.on=show?'1':'';e.target.textContent=show?'Amaga les solucions':'Mostra les solucions';
+    VESS.forEach(s=>{const el=$(`#s-${s.k}`);el.hidden=!show;el.textContent='Solució: '+RIVERS.filter(d=>d.v===s.k).map(d=>d.n).join(', ')});
+  };
+  $('#clear').onclick=()=>recallGame();
+  clearMarks();scoreEl.innerHTML='';
+}
+
+start('estudia');
+</script>
